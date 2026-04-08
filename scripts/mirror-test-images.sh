@@ -14,7 +14,7 @@
 #      pushes it.
 #
 # Usage:
-#   export AWS_ACCOUNT_ID=123456789012
+#   export AWS_ACCOUNT=123456789012
 #   export AWS_REGION=us-west-2          # optional, defaults to us-west-2
 #   ./scripts/mirror-test-images.sh
 #
@@ -26,10 +26,10 @@ set -Euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-: "${AWS_ACCOUNT_ID:?Set AWS_ACCOUNT_ID to your AWS account ID}"
+: "${AWS_ACCOUNT:?Set AWS_ACCOUNT to your AWS account ID}"
 : "${AWS_REGION:=us-west-2}"
 
-ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+ECR_REGISTRY="${AWS_ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com"
 ECR_PREFIX="networking-e2e-test-images"
 
 # Image tags — keep in sync with test/framework/utils/const.go
