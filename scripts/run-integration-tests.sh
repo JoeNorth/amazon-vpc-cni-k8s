@@ -121,6 +121,18 @@ check_is_installed docker
 check_is_installed aws
 check_aws_credentials
 
+# External CNI image registry credentials. When EXTERNAL_REGISTRY is set,
+# the script skips ECR repo creation and image builds, and authenticates
+# to the external registry using standard docker credentials instead.
+: "${EXTERNAL_REGISTRY:=""}"
+: "${EXTERNAL_REGISTRY_USERNAME:=""}"
+: "${EXTERNAL_REGISTRY_PASSWORD:=""}"
+
+_EXTERNAL_CNI_IMAGES=false
+if [[ -n "$EXTERNAL_REGISTRY" ]]; then
+    _EXTERNAL_CNI_IMAGES=true
+fi
+
 : "${AWS_ACCOUNT_ID:=$(aws sts get-caller-identity --query Account --output text)}"
 : "${AWS_ECR_REGISTRY:="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com"}"
 : "${AWS_ECR_REPO_NAME:="amazon-k8s-cni"}"
@@ -132,42 +144,54 @@ check_aws_credentials
 : "${MNG_ROLE_ARN:=""}"
 : "${BUILDX_BUILDER:="multi-arch-image-builder"}"
 
-echo "Logging in to docker repo"
+echo "Logging in to ECR"
 aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin ${AWS_ECR_REGISTRY}
-ensure_ecr_repo "$AWS_ACCOUNT_ID" "$AWS_ECR_REPO_NAME" "$AWS_DEFAULT_REGION"
-ensure_ecr_repo "$AWS_ACCOUNT_ID" "$AWS_INIT_ECR_REPO_NAME" "$AWS_DEFAULT_REGION"
+
+if [[ "$_EXTERNAL_CNI_IMAGES" == true ]]; then
+    echo "Logging in to external registry: $EXTERNAL_REGISTRY"
+    echo "$EXTERNAL_REGISTRY_PASSWORD" | docker login "$EXTERNAL_REGISTRY" --username "$EXTERNAL_REGISTRY_USERNAME" --password-stdin
+fi
+
+if [[ "$_EXTERNAL_CNI_IMAGES" == false ]]; then
+    ensure_ecr_repo "$AWS_ACCOUNT_ID" "$AWS_ECR_REPO_NAME" "$AWS_DEFAULT_REGION"
+    ensure_ecr_repo "$AWS_ACCOUNT_ID" "$AWS_INIT_ECR_REPO_NAME" "$AWS_DEFAULT_REGION"
+fi
 
 # Check to see if the image already exists in the ECR repository, and if
 # not, check out the CNI source code for that image tag, build the CNI
 # image and push it to the Docker repository
 
 CNI_IMAGES_BUILD=false
-if [[ $(aws ecr batch-get-image --repository-name=$AWS_ECR_REPO_NAME --image-ids imageTag=$TEST_IMAGE_VERSION \
---query 'images[].imageId.imageTag' --region "$AWS_DEFAULT_REGION") != "[]" ]]; then
-    echo "Image $AWS_ECR_REPO_NAME:$TEST_IMAGE_VERSION already exists. Skipping image build."
-else
-    echo "Image $AWS_ECR_REPO_NAME:$TEST_IMAGE_VERSION does not exist in repository."
-    ## $1=command, $2=args
-    build_and_push_image "multi-arch-cni-build-push" "IMAGE=$IMAGE_NAME VERSION=$TEST_IMAGE_VERSION"
-    CNI_IMAGES_BUILD=true
-fi
-
-if [[ $(aws ecr batch-get-image --repository-name=$AWS_INIT_ECR_REPO_NAME --image-ids imageTag=$TEST_IMAGE_VERSION \
---query 'images[].imageId.imageTag' --region "$AWS_DEFAULT_REGION") != "[]" ]]; then
-    echo "Image $AWS_INIT_ECR_REPO_NAME:$TEST_IMAGE_VERSION already exists. Skipping image build."
-else
-    echo "Image $AWS_INIT_ECR_REPO_NAME:$TEST_IMAGE_VERSION does not exist in repository."
-    ## $1=command, $2=args
-    build_and_push_image "multi-arch-cni-init-build-push" "INIT_IMAGE=$INIT_IMAGE_NAME VERSION=$TEST_IMAGE_VERSION"
-    CNI_IMAGES_BUILD=true
-fi
-
-# cleanup if we make docker build and push images
-if [[ "$CNI_IMAGES_BUILD" == true ]]; then
-    docker buildx rm "$BUILDX_BUILDER"
-    if [[ $TEST_IMAGE_VERSION != "$LOCAL_GIT_VERSION" ]]; then
-        popd
+if [[ "$_EXTERNAL_CNI_IMAGES" == false ]]; then
+    if [[ $(aws ecr batch-get-image --repository-name=$AWS_ECR_REPO_NAME --image-ids imageTag=$TEST_IMAGE_VERSION \
+    --query 'images[].imageId.imageTag' --region "$AWS_DEFAULT_REGION") != "[]" ]]; then
+        echo "Image $AWS_ECR_REPO_NAME:$TEST_IMAGE_VERSION already exists. Skipping image build."
+    else
+        echo "Image $AWS_ECR_REPO_NAME:$TEST_IMAGE_VERSION does not exist in repository."
+        ## $1=command, $2=args
+        build_and_push_image "multi-arch-cni-build-push" "IMAGE=$IMAGE_NAME VERSION=$TEST_IMAGE_VERSION"
+        CNI_IMAGES_BUILD=true
     fi
+
+    if [[ $(aws ecr batch-get-image --repository-name=$AWS_INIT_ECR_REPO_NAME --image-ids imageTag=$TEST_IMAGE_VERSION \
+    --query 'images[].imageId.imageTag' --region "$AWS_DEFAULT_REGION") != "[]" ]]; then
+        echo "Image $AWS_INIT_ECR_REPO_NAME:$TEST_IMAGE_VERSION already exists. Skipping image build."
+    else
+        echo "Image $AWS_INIT_ECR_REPO_NAME:$TEST_IMAGE_VERSION does not exist in repository."
+        ## $1=command, $2=args
+        build_and_push_image "multi-arch-cni-init-build-push" "INIT_IMAGE=$INIT_IMAGE_NAME VERSION=$TEST_IMAGE_VERSION"
+        CNI_IMAGES_BUILD=true
+    fi
+
+    # cleanup if we make docker build and push images
+    if [[ "$CNI_IMAGES_BUILD" == true ]]; then
+        docker buildx rm "$BUILDX_BUILDER"
+        if [[ $TEST_IMAGE_VERSION != "$LOCAL_GIT_VERSION" ]]; then
+            popd
+        fi
+    fi
+else
+    echo "Using external CNI images: $IMAGE_NAME:$TEST_IMAGE_VERSION"
 fi
 
 echo "*******************************************************************************"
