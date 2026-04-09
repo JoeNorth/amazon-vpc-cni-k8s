@@ -30,6 +30,7 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/aws/amazon-vpc-cni-k8s/test/framework/controller"
 	"github.com/aws/amazon-vpc-cni-k8s/test/framework/helm"
@@ -50,6 +51,11 @@ type Framework struct {
 func New(options Options) *Framework {
 	err := options.Validate()
 	Expect(err).ToNot(HaveOccurred())
+
+	// Set the controller-runtime global logger before starting the cache,
+	// so that informer reflectors have a working logger from the start.
+	logger := utils.NewGinkgoLogger()
+	ctrllog.SetLogger(logger)
 
 	// Create config for clients that need to access subresources
 	config, err := clientcmd.BuildConfigFromFlags("", options.KubeConfig)
@@ -112,6 +118,6 @@ func New(options Options) *Framework {
 		K8sResourceManagers: k8s.NewResourceManager(k8sClient, clientset, k8sSchema, config),
 		InstallationManager: controller.NewDefaultInstallationManager(
 			helm.NewDefaultReleaseManager(options.KubeConfig)),
-		Logger: utils.NewGinkgoLogger(),
+		Logger: logger,
 	}
 }
