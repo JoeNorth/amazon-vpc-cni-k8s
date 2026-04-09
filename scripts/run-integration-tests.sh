@@ -131,6 +131,7 @@ check_aws_credentials
 _EXTERNAL_CNI_IMAGES=false
 if [[ -n "$EXTERNAL_REGISTRY" ]]; then
     _EXTERNAL_CNI_IMAGES=true
+    check_is_installed yq
 fi
 
 : "${AWS_ACCOUNT_ID:=$(aws sts get-caller-identity --query Account --output text)}"
@@ -248,6 +249,19 @@ sed -i'.bak' "s,:$MANIFEST_IMAGE_VERSION,:$TEST_IMAGE_VERSION," "$TEST_CONFIG_PA
 grep -r -q $TEST_IMAGE_VERSION $TEST_CONFIG_PATH
 sed -i'.bak' "s,602401143452.dkr.ecr.us-west-2.amazonaws.com/amazon-k8s-cni-init,$INIT_IMAGE_NAME," "$TEST_CONFIG_PATH"
 grep -r -q $INIT_IMAGE_NAME $TEST_CONFIG_PATH
+
+if [[ "$_EXTERNAL_CNI_IMAGES" == true ]]; then
+    echo "Creating image pull secret for external registry"
+    $KUBECTL_PATH create secret docker-registry external-registry-creds \
+        --namespace kube-system \
+        --docker-server="$EXTERNAL_REGISTRY" \
+        --docker-username="$EXTERNAL_REGISTRY_USERNAME" \
+        --docker-password="$EXTERNAL_REGISTRY_PASSWORD" \
+        --dry-run=client -o yaml | $KUBECTL_PATH apply -f -
+
+    # Inject imagePullSecrets into the DaemonSet pod spec
+    yq -i '(select(.kind == "DaemonSet" and .metadata.name == "aws-node") | .spec.template.spec.imagePullSecrets) = [{"name": "external-registry-creds"}]' "$TEST_CONFIG_PATH"
+fi
 
 echo "*******************************************************************************"
 echo "Updating CNI to image $IMAGE_NAME:$TEST_IMAGE_VERSION"
