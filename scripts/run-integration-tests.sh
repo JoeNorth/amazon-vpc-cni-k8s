@@ -221,6 +221,7 @@ if [[ "$PROVISION" == true ]]; then
     fi
 fi
 __cluster_created=1
+export KUBECONFIG=$KUBECONFIG_PATH
 
 UP_CLUSTER_DURATION=$((SECONDS - START))
 echo "TIMELINE: Upping test cluster took $UP_CLUSTER_DURATION seconds."
