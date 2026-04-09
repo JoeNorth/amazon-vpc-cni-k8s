@@ -7,11 +7,10 @@
 # 617930562442.dkr.ecr.us-west-2.amazonaws.com registry.
 #
 # What it does:
-#   1. Pulls public Docker Hub images (busybox, nginx, curl) and re-tags/pushes
-#      them into ECR under the networking-e2e-test-images/ prefix.
-#   2. Builds a multi-arch netcat-openbsd image from Alpine and pushes it.
-#   3. Builds the aws-vpc-cni-test-helper image from source/test/agent/ and
-#      pushes it.
+#   1. Mirrors public Docker Hub images (busybox, nginx, curl) into ECR
+#      under the networking-e2e-test-images/ prefix.
+#   2. Mirrors the netcat-openbsd image from public.ecr.aws/eks/.
+#   3. Builds the aws-vpc-cni-test-helper image from test/agent/ and pushes it.
 #
 # Usage:
 #   export AWS_ACCOUNT=123456789012
@@ -67,8 +66,8 @@ ensure_buildx_builder() {
     fi
 }
 
-# Mirror a public Docker Hub image into ECR.
-# $1 = Docker Hub source image (e.g. busybox:latest)
+# Mirror a public image into ECR.
+# $1 = source image (e.g. docker.io/library/busybox:latest, public.ecr.aws/eks/...)
 # $2 = ECR repo name under the prefix (e.g. busybox)
 # $3 = tag
 mirror_image() {
@@ -119,28 +118,10 @@ mirror_image "docker.io/library/nginx:${NGINX_TAG}"         "nginx"             
 mirror_image "docker.io/curlimages/curl:${CURL_TAG}"        "curlimages/curl"      "$CURL_TAG"
 echo ""
 
-# --- 2. Build netcat-openbsd from Alpine -------------------------------------
+# --- 2. Mirror netcat-openbsd from public ECR ---------------------------------
 
-echo "--- Building netcat-openbsd image ---"
-NETCAT_REPO="${ECR_PREFIX}/netcat-openbsd"
-NETCAT_DEST="${ECR_REGISTRY}/${NETCAT_REPO}:${NETCAT_TAG}"
-ensure_ecr_repo "$NETCAT_REPO"
-
-NETCAT_TMPDIR=$(mktemp -d)
-trap 'rm -rf "$NETCAT_TMPDIR"' EXIT
-
-cat > "${NETCAT_TMPDIR}/Dockerfile" <<'DOCKERFILE'
-FROM alpine:latest
-RUN apk add --no-cache netcat-openbsd
-CMD ["nc"]
-DOCKERFILE
-
-docker buildx build \
-    --platform "$PLATFORMS" \
-    -t "$NETCAT_DEST" \
-    --push \
-    "$NETCAT_TMPDIR"
-echo "Pushed $NETCAT_DEST"
+echo "--- Mirroring netcat-openbsd image ---"
+mirror_image "public.ecr.aws/eks/networking-e2e-test-images/netcat-openbsd:${NETCAT_TAG}" "netcat-openbsd" "$NETCAT_TAG"
 echo ""
 
 # --- 3. Build aws-vpc-cni-test-helper from source ----------------------------
