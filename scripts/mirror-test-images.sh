@@ -110,21 +110,16 @@ echo ""
 
 ensure_buildx_builder
 
-# --- 1. Docker Hub mirrors ---------------------------------------------------
+# --- 1. ECR Public mirrors ---------------------------------------------------
 
-echo "--- Mirroring Docker Hub images ---"
-mirror_image "docker.io/library/busybox:${BUSYBOX_TAG}"    "busybox"              "$BUSYBOX_TAG"
-mirror_image "docker.io/library/nginx:${NGINX_TAG}"         "nginx"                "$NGINX_TAG"
-mirror_image "docker.io/curlimages/curl:${CURL_TAG}"        "curlimages/curl"      "$CURL_TAG"
+echo "--- Mirroring ECR Public images ---"
+mirror_image "public.ecr.aws/eks/networking-e2e-test-images/busybox:${BUSYBOX_TAG}"          "busybox"              "$BUSYBOX_TAG"
+mirror_image "public.ecr.aws/eks/networking-e2e-test-images/nginx:${NGINX_TAG}"              "nginx"                "$NGINX_TAG"
+mirror_image "public.ecr.aws/eks/networking-e2e-test-images/curlimages/curl:${CURL_TAG}"     "curlimages/curl"      "$CURL_TAG"
+mirror_image "public.ecr.aws/eks/networking-e2e-test-images/netcat-openbsd:${NETCAT_TAG}"    "netcat-openbsd"       "$NETCAT_TAG"
 echo ""
 
-# --- 2. Mirror netcat-openbsd from public ECR ---------------------------------
-
-echo "--- Mirroring netcat-openbsd image ---"
-mirror_image "public.ecr.aws/eks/networking-e2e-test-images/netcat-openbsd:${NETCAT_TAG}" "netcat-openbsd" "$NETCAT_TAG"
-echo ""
-
-# --- 3. Build aws-vpc-cni-test-helper from source ----------------------------
+# --- 2. Build aws-vpc-cni-test-helper from source ----------------------------
 
 echo "--- Building aws-vpc-cni-test-helper image ---"
 TEST_HELPER_REPO="${ECR_PREFIX}/aws-vpc-cni-test-helper"
