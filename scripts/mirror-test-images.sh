@@ -9,7 +9,8 @@
 # What it does:
 #   1. Mirrors public Docker Hub images (busybox, nginx, curl) into ECR
 #      under the networking-e2e-test-images/ prefix.
-#   2. Mirrors the netcat-openbsd image from public.ecr.aws/eks/.
+#   2. Builds a multi-arch netcat-openbsd image from alpine:3.15 (the upstream
+#      image at public.ecr.aws/eks/ is amd64-only).
 #   3. Builds the aws-vpc-cni-test-helper image from test/agent/ and pushes it.
 #
 # Usage:
@@ -116,10 +117,37 @@ echo "--- Mirroring ECR Public images ---"
 mirror_image "public.ecr.aws/eks/networking-e2e-test-images/busybox:${BUSYBOX_TAG}"          "busybox"              "$BUSYBOX_TAG"
 mirror_image "public.ecr.aws/eks/networking-e2e-test-images/nginx:${NGINX_TAG}"              "nginx"                "$NGINX_TAG"
 mirror_image "public.ecr.aws/eks/networking-e2e-test-images/curlimages/curl:${CURL_TAG}"     "curlimages/curl"      "$CURL_TAG"
-mirror_image "public.ecr.aws/eks/networking-e2e-test-images/netcat-openbsd:${NETCAT_TAG}"    "netcat-openbsd"       "$NETCAT_TAG"
 echo ""
 
-# --- 2. Build aws-vpc-cni-test-helper from source ----------------------------
+# --- 2. Build netcat-openbsd multi-arch from Alpine 3.15 ---------------------
+# The upstream image (public.ecr.aws/eks/.../netcat-openbsd:v1.0) is amd64-only.
+# We rebuild from alpine:3.15 which ships the same netcat-openbsd 1.130-r3
+# package (Debian patchlevel 1.130) whose -v flag prints "succeeded!" on UDP
+# connections as the tests expect. Alpine 3.15 supports both amd64 and arm64.
+
+echo "--- Building netcat-openbsd (multi-arch) ---"
+NETCAT_REPO="${ECR_PREFIX}/netcat-openbsd"
+NETCAT_DEST="${ECR_REGISTRY}/${NETCAT_REPO}:${NETCAT_TAG}"
+ensure_ecr_repo "$NETCAT_REPO"
+
+NETCAT_TMPDIR=$(mktemp -d)
+trap 'rm -rf "$NETCAT_TMPDIR"' EXIT
+
+cat > "${NETCAT_TMPDIR}/Dockerfile" <<'DOCKERFILE'
+FROM alpine:3.15
+RUN apk add --no-cache netcat-openbsd
+CMD ["/bin/sh"]
+DOCKERFILE
+
+docker buildx build \
+    --platform "$PLATFORMS" \
+    -t "$NETCAT_DEST" \
+    --push \
+    "$NETCAT_TMPDIR"
+echo "Pushed $NETCAT_DEST"
+echo ""
+
+# --- 3. Build aws-vpc-cni-test-helper from source ----------------------------
 
 echo "--- Building aws-vpc-cni-test-helper image ---"
 TEST_HELPER_REPO="${ECR_PREFIX}/aws-vpc-cni-test-helper"
