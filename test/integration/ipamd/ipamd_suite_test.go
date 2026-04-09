@@ -113,10 +113,15 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = AfterSuite(func() {
-	// Restore coredns deployment
 	By("restoring coredns deployment")
-	err = f.K8sResourceManagers.DeploymentManager().UpdateAndWaitTillDeploymentIsReady(coreDNSDeploymentCopy,
+	coreDNSDeployment, err := f.K8sResourceManagers.DeploymentManager().GetDeployment(CoreDNSDeploymentName,
+		KubeSystemNamespace)
+	Expect(err).ToNot(HaveOccurred())
+
+	coreDNSDeployment.Spec.Template.Spec.NodeSelector = coreDNSDeploymentCopy.Spec.Template.Spec.NodeSelector
+	err = f.K8sResourceManagers.DeploymentManager().UpdateAndWaitTillDeploymentIsReady(coreDNSDeployment,
 		utils.DefaultDeploymentReadyTimeout)
+	Expect(err).ToNot(HaveOccurred())
 
 	By("deleting test namespace")
 	f.K8sResourceManagers.NamespaceManager().
