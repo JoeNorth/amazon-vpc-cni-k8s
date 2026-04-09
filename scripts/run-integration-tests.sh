@@ -30,6 +30,9 @@ ARCH=$(go env GOARCH)
 : "${RUN_BOTTLEROCKET_TEST:=false}"
 : "${RUN_PERFORMANCE_TESTS:=false}"
 : "${RUNNING_PERFORMANCE:=false}"
+# TEST_IMAGE_REGISTRY is the registry where e2e test images (busybox, nginx,
+# test-helper, etc.) are stored. Override this when using mirrored images.
+: "${TEST_IMAGE_REGISTRY:="617930562442.dkr.ecr.us-west-2.amazonaws.com"}"
 : "${KOPS_VERSION=v1.34.0-beta.1}"
 
 if [[ -z $EKS_CLUSTER_VERSION || -z $K8S_VERSION ]]; then
@@ -241,9 +244,9 @@ if [[ $RUN_CNI_INTEGRATION_TESTS == true ]]; then
     focus="CANARY"
     skip="STATIC_CANARY"
     echo "Running ginkgo tests with focus: $focus"
-    (cd "$INTEGRATION_TEST_DIR/cni" && CGO_ENABLED=0 ginkgo --focus="$focus" --skip="$skip" -v --timeout 60m --no-color --fail-on-pending -- --cluster-kubeconfig="$KUBECONFIG" --cluster-name="$CLUSTER_NAME" --aws-region="$AWS_DEFAULT_REGION" --aws-vpc-id="$VPC_ID" --ng-name-label-key="kubernetes.io/os" --ng-name-label-val="linux")
-    (cd "$INTEGRATION_TEST_DIR/ipamd" && CGO_ENABLED=0 ginkgo --focus="$focus" -v --timeout 60m --no-color --fail-on-pending -- --cluster-kubeconfig="$KUBECONFIG" --cluster-name="$CLUSTER_NAME" --aws-region="$AWS_DEFAULT_REGION" --aws-vpc-id="$VPC_ID" --ng-name-label-key="kubernetes.io/os" --ng-name-label-val="linux")
-    (cd "$INTEGRATION_TEST_DIR/custom-networking-sgpp" && CGO_ENABLED=0 ginkgo -v --timeout 60m --no-color --fail-on-pending -- --cluster-kubeconfig="$KUBECONFIG" --cluster-name="$CLUSTER_NAME" --aws-region="$AWS_DEFAULT_REGION" --aws-vpc-id="$VPC_ID" --ng-name-label-key="kubernetes.io/os" --ng-name-label-val="linux")
+    (cd "$INTEGRATION_TEST_DIR/cni" && CGO_ENABLED=0 ginkgo --focus="$focus" --skip="$skip" -v --timeout 60m --no-color --fail-on-pending -- --cluster-kubeconfig="$KUBECONFIG" --cluster-name="$CLUSTER_NAME" --aws-region="$AWS_DEFAULT_REGION" --aws-vpc-id="$VPC_ID" --ng-name-label-key="kubernetes.io/os" --ng-name-label-val="linux" --test-image-registry="$TEST_IMAGE_REGISTRY")
+    (cd "$INTEGRATION_TEST_DIR/ipamd" && CGO_ENABLED=0 ginkgo --focus="$focus" -v --timeout 60m --no-color --fail-on-pending -- --cluster-kubeconfig="$KUBECONFIG" --cluster-name="$CLUSTER_NAME" --aws-region="$AWS_DEFAULT_REGION" --aws-vpc-id="$VPC_ID" --ng-name-label-key="kubernetes.io/os" --ng-name-label-val="linux" --test-image-registry="$TEST_IMAGE_REGISTRY")
+    (cd "$INTEGRATION_TEST_DIR/custom-networking-sgpp" && CGO_ENABLED=0 ginkgo -v --timeout 60m --no-color --fail-on-pending -- --cluster-kubeconfig="$KUBECONFIG" --cluster-name="$CLUSTER_NAME" --aws-region="$AWS_DEFAULT_REGION" --aws-vpc-id="$VPC_ID" --ng-name-label-key="kubernetes.io/os" --ng-name-label-val="linux" --test-image-registry="$TEST_IMAGE_REGISTRY")
     TEST_PASS=$?
     CURRENT_IMAGE_INTEGRATION_DURATION=$((SECONDS - START))
     echo "TIMELINE: Current image integration tests took $CURRENT_IMAGE_INTEGRATION_DURATION seconds."
